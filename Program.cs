@@ -1,10 +1,5 @@
-﻿
-using System;
-using System.IO;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
-using static System.Net.Mime.MediaTypeNames;
-
 class Program
 {
     static void Main()
@@ -15,7 +10,11 @@ class Program
         Console.Write("Square size: ");
         int squareSize = int.Parse(Console.ReadLine()!);
 
-        if (!File.Exists(inputPath) || squareSize <= 0)
+        Console.Write("Mode (S/M): ");
+        string mode = Console.ReadLine()!.ToUpper();
+
+        if (!File.Exists(inputPath) || squareSize <= 0 ||
+            (mode != "S" && mode != "M"))
         {
             Console.WriteLine("Invalid input!");
             return;
@@ -31,7 +30,7 @@ class Program
         int width = image.Width;
         int height = image.Height;
 
-        for (int y = 0; y < height; y += squareSize)
+        void ProcessRow(int y)
         {
             for (int x = 0; x < width; x += squareSize)
             {
@@ -41,7 +40,6 @@ class Program
                 long r = 0, g = 0, b = 0;
                 int count = 0;
 
-                
                 for (int i = y; i < endY; i++)
                 {
                     for (int j = x; j < endX; j++)
@@ -61,7 +59,6 @@ class Program
                     (byte)(b / count)
                 );
 
-             
                 for (int i = y; i < endY; i++)
                 {
                     for (int j = x; j < endX; j++)
@@ -70,6 +67,27 @@ class Program
                     }
                 }
             }
+        }
+
+        if (mode == "S")
+        {
+            for (int y = 0; y < height; y += squareSize)
+            {
+                ProcessRow(y);
+            }
+        }
+        else
+        {
+            int rows = (height - 1) / squareSize + 1;
+
+            Parallel.For(0, rows, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Environment.ProcessorCount
+            },
+            row =>
+            {
+                ProcessRow(row * squareSize);
+            });
         }
 
         image.Save(outputPath);
