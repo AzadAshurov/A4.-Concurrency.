@@ -13,10 +13,10 @@ using Avalonia.Threading;
 using SixLabors.ImageSharp.PixelFormats;
 using ImageSharpImage = SixLabors.ImageSharp.Image;
 
-
 class Program
 {
     public static string InputPath = "";
+    public static string OutputPath = "";
     public static int SquareSize;
     public static string Mode = "";
 
@@ -24,6 +24,7 @@ class Program
     static void Main(string[] args)
     {
         string sizeText;
+        bool preset = false;
 
         if (args.Length == 3)
         {
@@ -33,14 +34,47 @@ class Program
         }
         else if (args.Length == 0)
         {
-            Console.Write("Image path: ");
-            InputPath = Console.ReadLine()!.Trim('"');
+            Console.WriteLine("Choose processing preset:");
+            Console.WriteLine("1. Single-threaded (30px, test image)");
+            Console.WriteLine("2. Multi-threaded (7px, test image)");
+            Console.WriteLine("3. Custom settings");
+            Console.Write("\nChoice: ");
 
-            Console.Write("Square size: ");
-            sizeText = Console.ReadLine()!;
+            string choice = Console.ReadLine() ?? "";
 
-            Console.Write("Mode (S/M): ");
-            Mode = Console.ReadLine()!.ToUpper();
+            if (choice == "1" || choice == "2")
+            {
+                string? path = FindPresetImage();
+
+                if (path == null)
+                {
+                    Console.WriteLine("Test image not found!");
+                    Console.WriteLine(
+                        "Expected: ImageSourceAndResult/basicSource.jpg");
+                    return;
+                }
+
+                InputPath = path;
+                sizeText = choice == "1" ? "30" : "7";
+                Mode = choice == "1" ? "S" : "M";
+                preset = true;
+            }
+            else if (choice == "3")
+            {
+                Console.Write("Image path: ");
+                InputPath = (Console.ReadLine() ?? "").Trim().Trim('"');
+
+                Console.Write("Square size: ");
+                sizeText = Console.ReadLine() ?? "";
+
+                Console.Write("Mode (S/M): ");
+                Mode = (Console.ReadLine() ?? "").Trim().ToUpper();
+            }
+            else
+            {
+                Console.WriteLine("Invalid choice!");
+                return;
+            }
         }
         else
         {
@@ -58,12 +92,65 @@ class Program
         }
 
         SquareSize = size;
+        InputPath = Path.GetFullPath(InputPath);
+
+        if (preset)
+        {
+            OutputPath = Path.Combine(
+                Path.GetDirectoryName(InputPath)!,
+                "result.jpg");
+        }
+        else
+        {
+            string desktop = Environment.GetFolderPath(
+                Environment.SpecialFolder.DesktopDirectory);
+
+            if (string.IsNullOrEmpty(desktop))
+                desktop = Environment.CurrentDirectory;
+
+            OutputPath = Path.Combine(desktop, "result.jpg");
+        }
+
+        Console.WriteLine($"\nImage: {InputPath}");
+        Console.WriteLine($"Square size: {SquareSize}");
+        Console.WriteLine($"Mode: {Mode}");
+        Console.WriteLine($"Output: {OutputPath}");
 
         AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .StartWithClassicDesktopLifetime(args);
     }
+
+    static string? FindPresetImage()
+    {
+        string[] locations =
+        {
+            Environment.CurrentDirectory,
+            AppContext.BaseDirectory
+        };
+
+        foreach (string location in locations)
+        {
+            DirectoryInfo? folder = new DirectoryInfo(location);
+
+            while (folder != null)
+            {
+                string path = Path.Combine(
+                    folder.FullName,
+                    "ImageSourceAndResult",
+                    "basicSource.jpg");
+
+                if (File.Exists(path))
+                    return path;
+
+                folder = folder.Parent;
+            }
+        }
+
+        return null;
+    }
 }
+
 
 class App : Application
 {
@@ -191,13 +278,7 @@ class MainWindow : Window
 
             status.Text = "Saving result.jpg...";
 
-            string desktop = Environment.GetFolderPath(
-                Environment.SpecialFolder.DesktopDirectory);
-
-            if (string.IsNullOrEmpty(desktop))
-                desktop = Environment.CurrentDirectory;
-
-            string outputPath = Path.Combine(desktop, "result.jpg");
+            string outputPath = Program.OutputPath;
 
             await Task.Run(() =>
             {
@@ -270,7 +351,7 @@ class MainWindow : Window
             long r = 0, g = 0, b = 0;
             long count = (long)(endX - x) * (endY - y);
 
-           
+
             for (int i = y; i < endY; i++)
             {
                 for (int j = x; j < endX; j++)
@@ -288,8 +369,9 @@ class MainWindow : Window
                 (byte)(g / count),
                 (byte)(b / count)
             );
+            Thread.Sleep(50);
 
-          
+
             for (int i = y; i < endY; i++)
             {
                 for (int j = x; j < endX; j++)
@@ -322,7 +404,7 @@ class MainWindow : Window
                     (sourceY / Program.SquareSize) * columns +
                     (sourceX / Program.SquareSize);
 
-                
+
                 bool done = Volatile.Read(
                     ref completedSquares[squareIndex]) == 1;
 
