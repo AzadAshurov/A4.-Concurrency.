@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -10,8 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 
-using SixLabors.ImageSharp.PixelFormats;
-using ImageSharpImage = SixLabors.ImageSharp.Image;
+using SkiaSharp;
 
 class Program
 {
@@ -185,8 +183,8 @@ class MainWindow : Window
         Interval = TimeSpan.FromMilliseconds(50)
     };
 
-    private Rgba32[] original = [];
-    private Rgba32[] result = [];
+    private SKColor[] original = [];
+    private SKColor[] result = [];
     private int[] completedSquares = [];
 
     private int width, height;
@@ -282,10 +280,21 @@ class MainWindow : Window
 
             await Task.Run(() =>
             {
-                using var image = ImageSharpImage.LoadPixelData<Rgba32>(
-                    result, width, height);
+                using var bitmap = new SKBitmap(
+                    width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
 
-                image.Save(outputPath);
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                        bitmap.SetPixel(x, y, result[y * width + x]);
+                }
+
+                using var image = SKImage.FromBitmap(bitmap);
+                using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90)
+                    ?? throw new Exception("Cannot encode JPEG image.");
+                using var stream = File.Create(outputPath);
+
+                data.SaveTo(stream);
             });
 
             if (closed) return;
@@ -304,15 +313,21 @@ class MainWindow : Window
 
     private void LoadImage()
     {
-        using var image = ImageSharpImage.Load<Rgba32>(Program.InputPath);
+        using var image = SKBitmap.Decode(Program.InputPath)
+            ?? throw new Exception("Cannot load image.");
 
         width = image.Width;
         height = image.Height;
 
-        original = new Rgba32[checked(width * height)];
-        image.CopyPixelDataTo(original);
+        original = new SKColor[checked(width * height)];
 
-        result = (Rgba32[])original.Clone();
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+                original[y * width + x] = image.GetPixel(x, y);
+        }
+
+        result = (SKColor[])original.Clone();
 
         columns = (width - 1) / Program.SquareSize + 1;
         rows = (height - 1) / Program.SquareSize + 1;
@@ -356,20 +371,21 @@ class MainWindow : Window
             {
                 for (int j = x; j < endX; j++)
                 {
-                    Rgba32 pixel = original[i * width + j];
+                    SKColor pixel = original[i * width + j];
 
-                    r += pixel.R;
-                    g += pixel.G;
-                    b += pixel.B;
+
+                    r += pixel.Red;
+                    g += pixel.Green;
+                    b += pixel.Blue;
                 }
             }
 
-            Rgba32 average = new Rgba32(
+            SKColor average = new SKColor(
                 (byte)(r / count),
                 (byte)(g / count),
                 (byte)(b / count)
             );
-            Thread.Sleep(50);
+            Thread.Sleep(50); 
 
 
             for (int i = y; i < endY; i++)
@@ -408,15 +424,15 @@ class MainWindow : Window
                 bool done = Volatile.Read(
                     ref completedSquares[squareIndex]) == 1;
 
-                Rgba32 pixel = done
+                SKColor pixel = done
                     ? result[pixelIndex]
                     : original[pixelIndex];
 
                 int index = x * 4;
 
-                previewRow[index] = pixel.B;
-                previewRow[index + 1] = pixel.G;
-                previewRow[index + 2] = pixel.R;
+                previewRow[index] = pixel.Blue;
+                previewRow[index + 1] = pixel.Green;
+                previewRow[index + 2] = pixel.Red;
                 previewRow[index + 3] = 255;
             }
 
