@@ -2,3 +2,11 @@
 bin/
 obj/
 *.slnx
+
+# Published applications
+publish/
+publish-mac-arm64/
+publish-mac-intel/
+publish_windows/
+publish_mac_arm64/
+publish_mac_intel/
